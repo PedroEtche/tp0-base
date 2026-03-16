@@ -67,7 +67,7 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
       - CLI_ID=%s
       - CLI_LOG_LEVEL=DEBUG
     volumes:
-      - ./client/config.yaml:/build/config.yaml
+      - ./client/config.yaml:/config.yaml
     networks:
       - testing_net
     depends_on:
