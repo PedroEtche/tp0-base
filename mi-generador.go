@@ -17,6 +17,8 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - LOGGING_LEVEL=DEBUG
+    volumes:
+      - ./server/config.ini:/config.ini
     networks:
       - testing_net
 
@@ -64,6 +66,8 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
     environment:
       - CLI_ID=%s
       - CLI_LOG_LEVEL=DEBUG
+    volumes:
+      - ./client/config.yaml:/build/config.yaml
     networks:
       - testing_net
     depends_on:
