@@ -1,9 +1,12 @@
- #!/bin/bash
+#!/bin/bash
 
 MENSAJE="Docker testing..."
 
+# Limpiar servicios por si quedo alguno
+make docker-compose-down
+
 # Levantar servicios
-docker compose -f docker-compose-dev.yaml up -d --build
+make docker-compose-up
 
 # Dar tiempo a que el servidor se levante
 sleep 5
@@ -11,7 +14,7 @@ sleep 5
 # Crear container que usa netcat (Cliente)
 docker build -t echo-test -f echo-test/Dockerfile . 
 # Correr cliente (netcat) y capturar respuesta 
-RESPUESTA=$(docker run --name echo-test --network tp0_testing_net echo-test \
+RESPUESTA=$(docker run --rm --name echo-test --network tp0_testing_net echo-test \
     -c "echo $MENSAJE | nc server 12345")
 
 # Validar
@@ -22,6 +25,4 @@ else
 fi
 
 # Limpieza
-docker compose -f docker-compose-dev.yaml stop -t 1
-docker compose -f docker-compose-dev.yaml down
-docker rm -f echo-test
+make docker-compose-down
