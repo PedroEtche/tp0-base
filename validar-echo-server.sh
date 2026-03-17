@@ -2,21 +2,17 @@
 
 MENSAJE="Docker testing..."
 
-# Crear red
-docker network create echo-test-net
-
-# Levantar y correr el server, conectandolo a la red
-docker build -t echo-server -f server/Dockerfile .
-docker run -d --name echo-server --network echo-test-net echo-server -c "python main.py"
+# Levantar servicios
+docker compose -f docker-compose-dev.yaml up -d --build
 
 # Dar tiempo a que el servidor se levante
 sleep 5
 
 # Crear container que usa netcat (Cliente)
-docker build -t echo-test -f echo-test/Dockerfile .
+docker build -t echo-test -f echo-test/Dockerfile . 
 # Correr cliente (netcat) y capturar respuesta 
-RESPUESTA=$(docker run --name echo-test --network echo-test-net echo-test \
-    -c "echo $MENSAJE | nc echo-server 12345")
+RESPUESTA=$(docker run --name echo-test --network tp0_testing_net echo-test \
+    -c "echo $MENSAJE | nc server 12345")
 
 # Validar
 if [ "$RESPUESTA" = "$MENSAJE" ]; then
@@ -26,6 +22,6 @@ else
 fi
 
 # Limpieza
-docker rm -f echo-server > /dev/null
-docker rm -f echo-test > /dev/null
-docker network rm echo-test-net > /dev/null
+docker compose -f docker-compose-dev.yaml stop -t 1
+docker compose -f docker-compose-dev.yaml down
+docker rm -f echo-test
