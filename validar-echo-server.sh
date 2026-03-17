@@ -1,5 +1,7 @@
  #!/bin/bash
 
+MENSAJE="Docker testing..."
+
 # Crear red
 docker network create echo-test-net
 
@@ -7,12 +9,23 @@ docker network create echo-test-net
 docker build -t echo-server -f server/Dockerfile .
 docker run -d --name echo-server --network echo-test-net echo-server -c "python main.py"
 
-sleep 10
+# Dar tiempo a que el servidor se levante
+sleep 5
 
 # Crear container que usa netcat (Cliente)
 docker build -t echo-test -f echo-test/Dockerfile .
-docker run --network echo-test-net echo-test -c "echo hola | nc echo-server 12345"
+# Correr cliente (netcat) y capturar respuesta 
+RESPUESTA=$(docker run --name echo-test --network echo-test-net echo-test \
+    -c "echo $MENSAJE | nc echo-server 12345")
+
+# Validar
+if [ "$RESPUESTA" = "$MENSAJE" ]; then
+    echo "action: test_echo_server | result: success"
+else
+    echo "action: test_echo_server | result: fail"
+fi
 
 # Limpieza
-docker rm -f echo-server
-docker network rm echo-test-net
+docker rm -f echo-server > /dev/null
+docker rm -f echo-test > /dev/null
+docker network rm echo-test-net > /dev/null
