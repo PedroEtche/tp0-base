@@ -50,6 +50,19 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
+func (c *Client) sendMessage(msg string) {
+	bytes := []byte(msg)
+	written := 0
+
+	for written < len(bytes) {
+		n, err := c.conn.Write(bytes[written:])
+		if err != nil {
+			log.Fatalf("Error writting to conn: %v", err)
+		}
+		written += n
+	}
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	// There is an autoincremental msgID to identify every message sent
@@ -58,14 +71,10 @@ func (c *Client) StartClientLoop() {
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
 
-		// TODO: Modify the send to avoid short-write
-		fmt.Fprintf(
-			c.conn,
-			"[CLIENT %v] Message N°%v\n",
-			c.config.ID,
-			msgID,
-		)
-		msg, err := bufio.NewReader(c.conn).ReadString('\n')
+		msg := fmt.Sprintf("[CLIENT %v] Message N°%v\n", c.config.ID, msgID)
+		c.sendMessage(msg)
+
+		msgReceive, err := bufio.NewReader(c.conn).ReadString('\n')
 		c.conn.Close()
 
 		if err != nil {
@@ -78,7 +87,7 @@ func (c *Client) StartClientLoop() {
 
 		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
 			c.config.ID,
-			msg,
+			msgReceive,
 		)
 
 		// Wait a time between sending one message and the next one
