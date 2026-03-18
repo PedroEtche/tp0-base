@@ -70,10 +70,11 @@ func (c *Client) sendMessage(msg string) {
 func (c *Client) StartClientLoop() {
 	channel := make(chan os.Signal, 1)
 	signal.Notify(channel, syscall.SIGTERM)
+	term := false
 
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+	for msgID := 1; msgID <= c.config.LoopAmount && !term; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
 
@@ -99,14 +100,17 @@ func (c *Client) StartClientLoop() {
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
 
-		// At this point every resource has been free. Is it safe to exit if the signal has been received
-		select {
-		case sig := <-channel:
-			fmt.Println("received signal", sig)
-			os.Exit(0)
-		default:
-			continue
-		}
+		// At this point every resource has been free. It is safe to exit if the signal has been received
+		listenForSigTerm(channel, &term)
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
+}
+
+func listenForSigTerm(channel chan os.Signal, term *bool) {
+	select {
+	case sig := <-channel:
+		fmt.Println("Received signal", sig)
+		*term = true
+	default:
+	}
 }
