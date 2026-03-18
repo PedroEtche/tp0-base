@@ -4,6 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/op/go-logging"
@@ -65,6 +68,9 @@ func (c *Client) sendMessage(msg string) {
 
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
+	channel := make(chan os.Signal, 1)
+	signal.Notify(channel, syscall.SIGTERM)
+
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
 	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
@@ -93,6 +99,14 @@ func (c *Client) StartClientLoop() {
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
 
+		// At this point every resource has been free. Is it safe to exit if the signal has been received
+		select {
+		case sig := <-channel:
+			fmt.Println("received signal", sig)
+			os.Exit(0)
+		default:
+			continue
+		}
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
