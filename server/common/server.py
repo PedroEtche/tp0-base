@@ -1,5 +1,4 @@
 import socket
-import sys
 import logging
 import signal
 
@@ -10,6 +9,8 @@ class Server:
         self._server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server_socket.bind(('', port))
         self._server_socket.listen(listen_backlog)
+        self._server_socket.settimeout(1)
+        self._exit = False
         signal.signal(signal.SIGTERM, self.__graceful_exit)
 
     def run(self):
@@ -21,9 +22,13 @@ class Server:
         finishes, servers starts to accept new connections again
         """
 
-        while True:
+        while not self._exit:
             client_sock = self.__accept_new_connection()
+            if client_sock == None:
+                continue
             self.__handle_client_connection(client_sock)
+
+        self._server_socket.close()
 
     def __handle_client_connection(self, client_sock):
         """
@@ -52,14 +57,21 @@ class Server:
         Then connection created is printed and returned
         """
 
-        # Connection arrived
         logging.info('action: accept_connections | result: in_progress')
-        c, addr = self._server_socket.accept()
-        logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
-        return c
+        while not self._exit:
+            try:
+                c, addr = self._server_socket.accept()
+                logging.info(f'action: accept_connections | result: success | ip: {addr[0]}')
+                # Connection arrived
+                return c
+            except socket.timeout:
+                continue
+
+        # SIGTERM receive
+        return None
+
 
     def __graceful_exit(self, signum, _):
         print("Gracefully shuting down server")
         print(f"SIGNAL: {signum}")
-        self._server_socket.close()
-        sys.exit(0)
+        self._exit = True
