@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os"
@@ -16,10 +17,16 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            string
+	ID uint8
+	// TODO: Chequear que el nombre y apellido sean menor a 255 de largo
 	ServerAddress string
-	LoopAmount    int
-	LoopPeriod    time.Duration
+	Name          string
+	LastName      string
+	Document      uint32
+	BirthYear     uint8
+	BirthMonth    uint8
+	BirthDay      uint8
+	Number        uint32
 }
 
 // Client Entity that encapsulates how
@@ -53,7 +60,34 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-func (c *Client) sendMessage(msg string) {
+func createMessage(c *Client) []byte {
+	var msg []byte
+	bufU32 := make([]byte, 4)
+
+	msg = append(msg, byte(c.config.ID))
+
+	binary.BigEndian.PutUint32(bufU32, uint32(len(c.config.Name)))
+	msg = append(msg, bufU32...)
+	msg = append(msg, []byte(c.config.Name)...)
+
+	binary.BigEndian.PutUint32(bufU32, uint32(len(c.config.LastName)))
+	msg = append(msg, bufU32...)
+	msg = append(msg, []byte(c.config.LastName)...)
+
+	binary.BigEndian.PutUint32(bufU32, c.config.Document)
+	msg = append(msg, bufU32...)
+
+	msg = append(msg, byte(c.config.BirthYear))
+	msg = append(msg, byte(c.config.BirthMonth))
+	msg = append(msg, byte(c.config.BirthDay))
+
+	binary.BigEndian.PutUint32(bufU32, c.config.Number)
+	msg = append(msg, bufU32...)
+
+	return msg
+}
+
+func (c *Client) sendMessage(msg []byte) {
 	bytes := []byte(msg)
 	written := 0
 
@@ -66,6 +100,11 @@ func (c *Client) sendMessage(msg string) {
 	}
 }
 
+func recvMessage(c *Client) (string, error) {
+	msgReceive, err := bufio.NewReader(c.conn).ReadString('\n')
+	return msgReceive, err
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	channel := make(chan os.Signal, 1)
@@ -74,14 +113,14 @@ func (c *Client) StartClientLoop() {
 
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= c.config.LoopAmount && !term; msgID++ {
+	for msgID := 1; msgID <= 5 && !term; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
 		c.createClientSocket()
 
-		msg := fmt.Sprintf("[CLIENT %v] Message N°%v\n", c.config.ID, msgID)
+		msg := createMessage(c)
 		c.sendMessage(msg)
 
-		msgReceive, err := bufio.NewReader(c.conn).ReadString('\n')
+		msgReceive, err := recvMessage(c)
 		c.conn.Close()
 
 		if err != nil {
@@ -92,13 +131,17 @@ func (c *Client) StartClientLoop() {
 			return
 		}
 
-		log.Infof("action: receive_message | result: success | client_id: %v | msg: %v",
-			c.config.ID,
-			msgReceive,
+		if msgReceive == "" {
+			// TODO: Chequear que se recibio la respuesta correcta
+		}
+
+		log.Infof("action: receive_message | result: success | dni: %v | numero: %v",
+			c.config.Document,
+			c.config.Number,
 		)
 
 		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
+		time.Sleep(time.Second * 5)
 
 		// At this point every resource has been free. It is safe to exit if the signal has been received
 		listenForSigTerm(channel, &term)

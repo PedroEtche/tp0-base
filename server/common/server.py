@@ -1,6 +1,7 @@
 import socket
 import logging
 import signal
+from common.utils import Bet, store_bets
 
 
 class Server:
@@ -39,11 +40,11 @@ class Server:
         """
         try:
             # TODO: Modify the receive to avoid short-reads
-            msg = client_sock.recv(1024).rstrip().decode('utf-8')
-            addr = client_sock.getpeername()
-            logging.info(f'action: receive_message | result: success | ip: {addr[0]} | msg: {msg}')
+            bet = self.__read_msg(client_sock)
+            store_bets([bet])
+            logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
             # TODO: Modify the send to avoid short-writes
-            client_sock.send("{}\n".format(msg).encode('utf-8'))
+            client_sock.send("{}\n".format("Recibi el mensaje").encode('utf-8'))
         except OSError as e:
             logging.error("action: receive_message | result: fail | error: {e}")
         finally:
@@ -69,6 +70,28 @@ class Server:
 
         # SIGTERM receive
         return None
+
+    def __read_msg(self, client_sock):
+        agency = int.from_bytes(client_sock.recv(1), byteorder='big', signed=False)
+
+        name_len = int.from_bytes(client_sock.recv(4), byteorder='big', signed=False)
+        name = client_sock.recv(name_len).rstrip().decode('utf-8')
+
+        last_name_len = int.from_bytes(client_sock.recv(4), byteorder='big', signed=False)
+        last_name = client_sock.recv(last_name_len).rstrip().decode('utf-8')
+
+        document = int.from_bytes(client_sock.recv(4), byteorder='big', signed=False)
+
+        year = int.from_bytes(client_sock.recv(1), byteorder='big', signed=False)
+        month = int.from_bytes(client_sock.recv(1), byteorder='big', signed=False)
+        day = int.from_bytes(client_sock.recv(1), byteorder='big', signed=False)
+        birthdate = str(year) + "-" + str(month) + "-" + str(day)
+
+        number = int.from_bytes(client_sock.recv(4), byteorder='big', signed=False)
+
+        print(str(agency), name, last_name, str(document), birthdate, str(number))
+
+        return Bet(str(agency), name, last_name, str(document), birthdate, str(number))
 
 
     def __graceful_exit(self, signum, _):
