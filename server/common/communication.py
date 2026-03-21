@@ -1,7 +1,7 @@
-from utils import Bet
+from common.utils import Bet
 
-ACK = 1
-NACK = 0
+ACK = b'\x01'
+NACK = b'\x00'
 
 def read_exact(socket, n):
     data = bytearray()
