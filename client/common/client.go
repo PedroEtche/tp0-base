@@ -17,16 +17,18 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID uint8
-	// TODO: Chequear que el nombre y apellido sean menor a 255 de largo
+	ID            uint8
 	ServerAddress string
-	Name          string
-	LastName      string
-	Document      uint32
-	BirthYear     uint16
-	BirthMonth    uint8
-	BirthDay      uint8
-	Number        uint32
+	LoopAmount    int
+	LoopPeriod    time.Duration
+	// TODO: Chequear que el nombre y apellido sean menor a 255 de largo
+	Name       string
+	LastName   string
+	Document   uint32
+	BirthYear  uint16
+	BirthMonth uint8
+	BirthDay   uint8
+	Number     uint32
 }
 
 // Client Entity that encapsulates how
@@ -123,7 +125,7 @@ func (c *Client) StartClientLoop() {
 
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= 5 && !term; msgID++ {
+	for msgID := 1; msgID <= c.config.LoopAmount && !term; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
 		if err := c.createClientSocket(); err != nil {
 			continue
@@ -153,7 +155,7 @@ func (c *Client) StartClientLoop() {
 		)
 
 		// Wait a time between sending one message and the next one
-		time.Sleep(time.Second * 5)
+		time.Sleep(c.config.LoopPeriod)
 
 		// At this point every resource has been free. It is safe to exit if the signal has been received
 		listenForSigTerm(channel, &term)
