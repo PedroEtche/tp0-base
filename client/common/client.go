@@ -23,7 +23,7 @@ type ClientConfig struct {
 	Name          string
 	LastName      string
 	Document      uint32
-	BirthYear     uint8
+	BirthYear     uint16
 	BirthMonth    uint8
 	BirthDay      uint8
 	Number        uint32
@@ -63,6 +63,7 @@ func (c *Client) createClientSocket() error {
 func createMessage(c *Client) []byte {
 	var msg []byte
 	bufU32 := make([]byte, 4)
+	bufU16 := make([]byte, 2)
 
 	msg = append(msg, byte(c.config.ID))
 
@@ -77,7 +78,8 @@ func createMessage(c *Client) []byte {
 	binary.BigEndian.PutUint32(bufU32, c.config.Document)
 	msg = append(msg, bufU32...)
 
-	msg = append(msg, byte(c.config.BirthYear))
+	binary.BigEndian.PutUint16(bufU16, c.config.BirthYear)
+	msg = append(msg, bufU16...)
 	msg = append(msg, byte(c.config.BirthMonth))
 	msg = append(msg, byte(c.config.BirthDay))
 
@@ -100,9 +102,17 @@ func (c *Client) sendMessage(msg []byte) {
 	}
 }
 
-func recvMessage(c *Client) (string, error) {
-	msgReceive, err := bufio.NewReader(c.conn).ReadString('\n')
-	return msgReceive, err
+func recvACK(c *Client) error {
+	ack, err := bufio.NewReader(c.conn).ReadByte()
+	if err != nil {
+		return err
+	}
+
+	if ack == 0 {
+		return fmt.Errorf("Received NACK from server")
+	}
+
+	return nil
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
@@ -115,24 +125,26 @@ func (c *Client) StartClientLoop() {
 	// Messages if the message amount threshold has not been surpassed
 	for msgID := 1; msgID <= 5 && !term; msgID++ {
 		// Create the connection the server in every loop iteration. Send an
-		c.createClientSocket()
+		if err := c.createClientSocket(); err != nil {
+			continue
+		}
 
 		msg := createMessage(c)
 		c.sendMessage(msg)
 
-		msgReceive, err := recvMessage(c)
+		err := recvACK(c)
 		c.conn.Close()
 
 		if err != nil {
-			log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
-				c.config.ID,
-				err,
-			)
-			return
-		}
-
-		if msgReceive == "" {
-			// TODO: Chequear que se recibio la respuesta correcta
+			if err.Error() == "Received NACK from server" {
+				log.Error("action: receive_message | result: nack")
+			} else {
+				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
 		}
 
 		log.Infof("action: receive_message | result: success | dni: %v | numero: %v",

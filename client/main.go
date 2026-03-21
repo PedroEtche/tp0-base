@@ -83,7 +83,7 @@ func InitLogger(logLevel string) error {
 // PrintConfig Print all the configuration parameters of the program.
 // For debugging purposes only
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: success | client_id: %v | server_address: %s | name: %v | last_name: %v | document: %s | birth_year: %s | birth_month: %s | birth_day: %s | number: %s",
+	log.Infof("action: config | result: success | client_id: %v | server_address: %s | name: %s | last_name: %s | document: %v | birth_year: %v | birth_month: %v | birth_day: %v | number: %v",
 		v.GetUint32("id"),
 		v.GetString("server.address"),
 		v.GetString("name.first"),
@@ -115,7 +115,7 @@ func main() {
 		Name:          v.GetString("name.first"),
 		LastName:      v.GetString("name.last"),
 		Document:      v.GetUint32("document"),
-		BirthYear:     uint8(v.GetUint32("birth.year")),
+		BirthYear:     uint16(v.GetUint32("birth.year")),
 		BirthMonth:    uint8(v.GetUint32("birth.month")),
 		BirthDay:      uint8(v.GetUint32("birth.day")),
 		Number:        v.GetUint32("number"),
