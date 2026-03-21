@@ -2,7 +2,7 @@ import socket
 import logging
 import signal
 from common.utils import store_bets
-from common.communication import deserialize_into_bet, full_write, send_ACK, send_NACK
+from common.communication import deserialize_into_bet, send_ACK, send_NACK
 
 
 class Server:

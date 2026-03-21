@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -21,14 +22,13 @@ type ClientConfig struct {
 	ServerAddress string
 	LoopAmount    int
 	LoopPeriod    time.Duration
-	// TODO: Chequear que el nombre y apellido sean menor a 255 de largo
-	Name       string
-	LastName   string
-	Document   uint32
-	BirthYear  uint16
-	BirthMonth uint8
-	BirthDay   uint8
-	Number     uint32
+	Name          string
+	LastName      string
+	Document      uint32
+	BirthYear     uint16
+	BirthMonth    uint8
+	BirthDay      uint8
+	Number        uint32
 }
 
 // Client Entity that encapsulates how
@@ -57,46 +57,39 @@ func (c *Client) createClientSocket() error {
 			c.config.ID,
 			err,
 		)
+		return err
 	}
 	c.conn = conn
 	return nil
 }
 
 func createMessage(c *Client) []byte {
-	var msg []byte
-	bufU32 := make([]byte, 4)
-	bufU16 := make([]byte, 2)
+	var buf bytes.Buffer
 
-	msg = append(msg, byte(c.config.ID))
+	buf.WriteByte(c.config.ID)
 
-	binary.BigEndian.PutUint32(bufU32, uint32(len(c.config.Name)))
-	msg = append(msg, bufU32...)
-	msg = append(msg, []byte(c.config.Name)...)
+	binary.Write(&buf, binary.BigEndian, uint32(len(c.config.Name)))
+	buf.WriteString(c.config.Name)
 
-	binary.BigEndian.PutUint32(bufU32, uint32(len(c.config.LastName)))
-	msg = append(msg, bufU32...)
-	msg = append(msg, []byte(c.config.LastName)...)
+	binary.Write(&buf, binary.BigEndian, uint32(len(c.config.LastName)))
+	buf.WriteString(c.config.LastName)
 
-	binary.BigEndian.PutUint32(bufU32, c.config.Document)
-	msg = append(msg, bufU32...)
+	binary.Write(&buf, binary.BigEndian, c.config.Document)
 
-	binary.BigEndian.PutUint16(bufU16, c.config.BirthYear)
-	msg = append(msg, bufU16...)
-	msg = append(msg, byte(c.config.BirthMonth))
-	msg = append(msg, byte(c.config.BirthDay))
+	binary.Write(&buf, binary.BigEndian, c.config.BirthYear)
+	buf.WriteByte(c.config.BirthMonth)
+	buf.WriteByte(c.config.BirthDay)
 
-	binary.BigEndian.PutUint32(bufU32, c.config.Number)
-	msg = append(msg, bufU32...)
+	binary.Write(&buf, binary.BigEndian, c.config.Number)
 
-	return msg
+	return buf.Bytes()
 }
 
 func (c *Client) sendMessage(msg []byte) {
-	bytes := []byte(msg)
 	written := 0
 
-	for written < len(bytes) {
-		n, err := c.conn.Write(bytes[written:])
+	for written < len(msg) {
+		n, err := c.conn.Write(msg[written:])
 		if err != nil {
 			log.Fatalf("Error writting to conn: %v", err)
 		}
@@ -121,11 +114,15 @@ func recvACK(c *Client) error {
 func (c *Client) StartClientLoop() {
 	channel := make(chan os.Signal, 1)
 	signal.Notify(channel, syscall.SIGTERM)
-	term := false
 
 	// There is an autoincremental msgID to identify every message sent
 	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= c.config.LoopAmount && !term; msgID++ {
+	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
+		// At this point every resource has been free. It is safe to exit if the signal has been received
+		if listenForSigTerm(channel) {
+			break
+		}
+
 		// Create the connection the server in every loop iteration. Send an
 		if err := c.createClientSocket(); err != nil {
 			continue
@@ -157,17 +154,16 @@ func (c *Client) StartClientLoop() {
 		// Wait a time between sending one message and the next one
 		time.Sleep(c.config.LoopPeriod)
 
-		// At this point every resource has been free. It is safe to exit if the signal has been received
-		listenForSigTerm(channel, &term)
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
-func listenForSigTerm(channel chan os.Signal, term *bool) {
+func listenForSigTerm(channel chan os.Signal) bool {
 	select {
 	case sig := <-channel:
 		fmt.Println("Received signal", sig)
-		*term = true
+		return true
 	default:
+		return false
 	}
 }
