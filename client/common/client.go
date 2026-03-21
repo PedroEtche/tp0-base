@@ -149,7 +149,7 @@ func (c *Client) StartClientLoop() {
 			}
 		}
 
-		log.Infof("action: receive_message | result: success | dni: %v | numero: %v",
+		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
 			c.config.Document,
 			c.config.Number,
 		)
