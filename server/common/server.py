@@ -44,7 +44,7 @@ class Server:
             store_bets([bet])
             logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
             send_ACK(client_sock)
-        except OSError as e:
+        except Exception as e:
             logging.error(f"action: receive_message | result: fail | error: {e}")
             send_NACK(client_sock)
         finally:

@@ -24,10 +24,10 @@ def full_write(socket, data):
 def deserialize_into_bet(socket):
     agency = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
 
-    name_len = int.from_bytes(read_exact(socket, 4), byteorder='big', signed=False)
+    name_len = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
     name = read_exact(socket, name_len).decode('utf-8')
 
-    last_name_len = int.from_bytes(read_exact(socket, 4), byteorder='big', signed=False)
+    last_name_len = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
     last_name = read_exact(socket, last_name_len).decode('utf-8')
 
     document = int.from_bytes(read_exact(socket, 4), byteorder='big', signed=False)

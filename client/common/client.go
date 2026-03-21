@@ -68,10 +68,10 @@ func createMessage(c *Client) []byte {
 
 	buf.WriteByte(c.config.ID)
 
-	binary.Write(&buf, binary.BigEndian, uint32(len(c.config.Name)))
+	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.Name)))
 	buf.WriteString(c.config.Name)
 
-	binary.Write(&buf, binary.BigEndian, uint32(len(c.config.LastName)))
+	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.LastName)))
 	buf.WriteString(c.config.LastName)
 
 	binary.Write(&buf, binary.BigEndian, c.config.Document)
@@ -137,6 +137,7 @@ func (c *Client) StartClientLoop() {
 		if err != nil {
 			if err.Error() == "Received NACK from server" {
 				log.Error("action: receive_message | result: nack")
+				continue
 			} else {
 				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
 					c.config.ID,
