@@ -26,6 +26,7 @@ services:
       - CLI_NUMBER=7574
     volumes:
       - ./client/config.yaml:/config.yaml
+      - ./.data/agency-1.csv:/agency-1.csv
     networks:
       - testing_net
     depends_on:

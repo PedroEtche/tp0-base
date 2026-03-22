@@ -56,14 +56,12 @@ func main() {
 
 func writeClientsConfig(clientsInt int, w *bufio.Writer) {
 	for clientID := 1; clientID <= clientsInt; clientID++ {
-		clientService := "client" + strconv.Itoa(clientID)
-		cliID := strconv.Itoa(clientID)
-		block := fmt.Sprintf(`  %s:
-    container_name: %s
+		block := fmt.Sprintf(`  client%v:
+    container_name: client%v
     image: client:latest
     entrypoint: /client
     environment:
-      - CLI_ID=%s
+      - CLI_ID=%v
       - CLI_NAME_FIRST=Santiago Lionel
       - CLI_NAME_LAST=Lorca
       - CLI_DOCUMENT=30904465
@@ -73,12 +71,13 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
       - CLI_NUMBER=7574
     volumes:
       - ./client/config.yaml:/config.yaml
+      - ./.data/agency-%v.csv:/agency-1.csv
     networks:
       - testing_net
     depends_on:
       - server
 
-`, clientService, clientService, cliID)
+`, clientID, clientID, clientID, clientID)
 
 		writeConfig(w, block)
 	}
@@ -86,7 +85,7 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
 
 func writeConfig(w *bufio.Writer, s string) {
 	defer w.Flush()
-	// NOTE: Buffio parece evitar o al menos hacer muy poco probable que haya un shor write (al escribir en disco). Como se escriben muy pocos bytes por vez (menos de 256) asumo que no va a haber un short write
+	// NOTE: Buffio parece evitar o al menos hacer muy poco probable que haya un shor write (al escribir en disco). Como se escriben muy pocos bytes por vez asumo que no va a haber un short write
 	n, err := w.WriteString(s)
 	if err != nil {
 		log.Fatalf("Error appear when writting to file: %v", err)
