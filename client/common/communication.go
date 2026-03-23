@@ -16,10 +16,8 @@ Procotol for serializing a batch of bets:
 */
 
 const (
-	ACK                   byte = 0x01
-	NACK                  byte = 0x00
-	MAX_PACKET_SIZE       int  = 1024 * 8            // 8KB
-	MAX_BATCH_PACKET_SIZE int  = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
+	MAX_PACKET_SIZE       int = 1024 * 8            // 8KB
+	MAX_BATCH_PACKET_SIZE int = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
 )
 
 // CreateBatch create a Batch Packet from a list of bets. It returns the byte slice representing the packet.
@@ -99,14 +97,6 @@ func sendMessage(conn net.Conn, msg []byte) {
 		}
 		written += n
 	}
-}
-
-func sendACK(c net.Conn) {
-	sendMessage(c, []byte{ACK})
-}
-
-func sendNACK(c net.Conn) {
-	sendMessage(c, []byte{NACK})
 }
 
 func recvACK(c net.Conn) error {

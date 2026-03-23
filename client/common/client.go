@@ -84,24 +84,22 @@ func (c *Client) StartClientLoop() {
 		if err := recvACK(c.conn); err != nil {
 			if err.Error() == "Received NACK from server" {
 				log.Error("action: receive_message | result: nack")
+				// Corrupted batch. Try next batch
+				pending = pending[:0]
+				continue
 			} else {
 				log.Errorf(
 					"action: receive_message | result: fail | client_id: %v | error: %v",
 					c.config.ID,
 					err,
 				)
+				return
 			}
-			return
 		}
 
 		log.Info("action: receive_message | result: ack")
 		pending = left
-
-		// ACK means more batches need to be sent
-		sendACK(c.conn)
 	}
-	// NACK means the connection has finish
-	sendNACK(c.conn)
 }
 
 // sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch

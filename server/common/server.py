@@ -2,7 +2,7 @@ import socket
 import logging
 import signal
 from common.utils import store_bets
-from common.communication import deserialize_batch, send_ACK, send_NACK, continue_connection
+from common.communication import deserialize_batch, send_ACK, send_NACK
 
 
 class Server:
@@ -43,19 +43,22 @@ class Server:
         while True: 
             try:
                 bets = deserialize_batch(client_sock)
+                if bets.is_empty():
+                    break
                 store_bets(bets)
                 logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
-                send_ACK(client_sock)
+                try:
+                    send_ACK(client_sock)
+                except OSError as e:
+                    logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
+                    break
+                bets.clear()
             except Exception as e:
                 logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
                 send_NACK(client_sock)
-            finally:
-                if continue_connection(client_sock):
-                    logging.info('action: continuar_conexion')
-                    continue
-                client_sock.close()
-                logging.info('action: terminar_conexion')
-                break
+
+        client_sock.close()
+
 
     def __accept_new_connection(self):
         """

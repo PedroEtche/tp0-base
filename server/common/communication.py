@@ -56,9 +56,3 @@ def send_ACK(socket):
 
 def send_NACK(socket):
     full_write(socket, NACK)
-
-def continue_connection(socket):
-    msg = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
-    if msg == ACK:
-        return True
-    return False
