@@ -100,6 +100,7 @@ func (c *Client) StartClientLoop() {
 		log.Info("action: receive_message | result: ack")
 		pending = left
 	}
+	log.Info("action: batch_terminado | result: succes")
 }
 
 // sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch

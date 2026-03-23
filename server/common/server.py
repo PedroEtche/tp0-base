@@ -1,7 +1,7 @@
 import socket
 import logging
 import signal
-from common.utils import store_bets
+from common.utils import store_bets 
 from common.communication import deserialize_batch, send_ACK, send_NACK
 
 
@@ -43,19 +43,17 @@ class Server:
         while True: 
             try:
                 bets = deserialize_batch(client_sock)
-                if bets.is_empty():
-                    break
                 store_bets(bets)
                 logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
-                try:
-                    send_ACK(client_sock)
-                except OSError as e:
-                    logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
-                    break
-                bets.clear()
+                send_ACK(client_sock)
+                bets = []
             except Exception as e:
-                logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
-                send_NACK(client_sock)
+                if isinstance(e, OSError) and str(e) == "Connection closed by client":
+                    logging.info('action: connection_closed | result: success')
+                    break
+                else: 
+                    logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
+                    send_NACK(client_sock)
 
         client_sock.close()
 
