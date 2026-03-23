@@ -43,6 +43,14 @@ def deserialize_into_bet(socket):
 
     return Bet(str(agency), name, last_name, str(document), birthdate, str(number))
 
+
+def deserialize_batch(socket):
+    batch_amount = int.from_bytes(read_exact(socket, 2), byteorder='big', signed=False)
+    bets = []
+    for _ in range(batch_amount):
+        bets.append(deserialize_into_bet(socket))
+    return bets
+
 def send_ACK(socket):
     full_write(socket, ACK)
 

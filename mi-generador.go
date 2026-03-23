@@ -62,13 +62,6 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
     entrypoint: /client
     environment:
       - CLI_ID=%v
-      - CLI_NAME_FIRST=Santiago Lionel
-      - CLI_NAME_LAST=Lorca
-      - CLI_DOCUMENT=30904465
-      - CLI_BIRTH_YEAR=1999
-      - CLI_BIRTH_MONTH=03
-      - CLI_BIRTH_DAY=17
-      - CLI_NUMBER=7574
     volumes:
       - ./client/config.yaml:/config.yaml
       - ./.data/agency-%v.csv:/agency-1.csv

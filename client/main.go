@@ -3,9 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/op/go-logging"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
 	"github.com/7574-sistemas-distribuidos/docker-compose-init/client/common"
@@ -35,13 +39,7 @@ func InitConfig() (*viper.Viper, error) {
 	v.BindEnv("loop", "period")
 	v.BindEnv("loop", "amount")
 	v.BindEnv("log", "level")
-	v.BindEnv("name", "first")
-	v.BindEnv("name", "last")
-	v.BindEnv("document")
-	v.BindEnv("birth", "year")
-	v.BindEnv("birth", "month")
-	v.BindEnv("birth", "day")
-	v.BindEnv("number")
+	v.BindEnv("batch", "maxAmount")
 
 	// Try to read configuration from config file. If config file
 	// does not exists then ReadInConfig will fail but configuration
@@ -53,9 +51,9 @@ func InitConfig() (*viper.Viper, error) {
 	}
 
 	// Parse time.Duration variables and return an error if those variables cannot be parsed
-	// if _, err := time.ParseDuration(v.GetString("loop.period")); err != nil {
-	// 	return nil, errors.Wrapf(err, "Could not parse CLI_LOOP_PERIOD env var as time.Duration.")
-	// }
+	if _, err := time.ParseDuration(v.GetString("loop.period")); err != nil {
+		return nil, errors.Wrapf(err, "Could not parse CLI_LOOP_PERIOD env var as time.Duration.")
+	}
 
 	return v, nil
 }
@@ -85,18 +83,12 @@ func InitLogger(logLevel string) error {
 // PrintConfig Print all the configuration parameters of the program.
 // For debugging purposes only
 func PrintConfig(v *viper.Viper) {
-	log.Infof("action: config | result: success | client_id: %v | server_address: %s | loop_amount: %v | loop_period: %v | name: %s | last_name: %s | document: %v | birth_year: %v | birth_month: %v | birth_day: %v | number: %v",
+	log.Infof("action: config | result: success | client_id: %v | server_address: %s | loop_amount: %v | loop_period: %v | batch_max_amount: %v",
 		v.GetUint32("id"),
 		v.GetString("server.address"),
 		v.GetInt("loop.amount"),
 		v.GetDuration("loop.period"),
-		v.GetString("name.first"),
-		v.GetString("name.last"),
-		v.GetUint32("document"),
-		v.GetUint32("birth.year"),
-		v.GetUint32("birth.month"),
-		v.GetUint32("birth.day"),
-		v.GetUint32("number"),
+		v.GetInt("batch.maxAmount"),
 	)
 }
 
@@ -114,19 +106,13 @@ func main() {
 	PrintConfig(v)
 
 	clientConfig := common.ClientConfig{
-		ServerAddress: v.GetString("server.address"),
-		ID:            uint8(v.GetUint32("id")),
-		LoopAmount:    v.GetInt("loop.amount"),
-		LoopPeriod:    v.GetDuration("loop.period"),
-		Name:          v.GetString("name.first"),
-		LastName:      v.GetString("name.last"),
-		Document:      v.GetUint32("document"),
-		BirthYear:     uint16(v.GetUint32("birth.year")),
-		BirthMonth:    uint8(v.GetUint32("birth.month")),
-		BirthDay:      uint8(v.GetUint32("birth.day")),
-		Number:        v.GetUint32("number"),
+		ServerAddress:  v.GetString("server.address"),
+		ID:             uint8(v.GetUint32("id")),
+		BatchMaxAmount: v.GetInt("batch.maxAmount"),
 	}
 
-	client := common.NewClient(clientConfig)
+	channel := make(chan os.Signal, 1)
+	signal.Notify(channel, syscall.SIGTERM)
+	client := common.NewClient(clientConfig, channel)
 	client.StartClientLoop()
 }

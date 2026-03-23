@@ -2,7 +2,7 @@ import socket
 import logging
 import signal
 from common.utils import store_bets
-from common.communication import deserialize_into_bet, send_ACK, send_NACK
+from common.communication import deserialize_batch, send_ACK, send_NACK
 
 
 class Server:
@@ -39,13 +39,14 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
+        bets = []
         try:
-            bet = deserialize_into_bet(client_sock)
-            store_bets([bet])
-            logging.info(f'action: apuesta_almacenada | result: success | dni: {bet.document} | numero: {bet.number}')
+            bets = deserialize_batch(client_sock)
+            store_bets(bets)
+            logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
             send_ACK(client_sock)
         except Exception as e:
-            logging.error(f"action: receive_message | result: fail | error: {e}")
+            logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
             send_NACK(client_sock)
         finally:
             client_sock.close()

@@ -1,15 +1,11 @@
 package common
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
 	"github.com/op/go-logging"
 )
@@ -18,30 +14,24 @@ var log = logging.MustGetLogger("log")
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
-	ID            uint8
-	ServerAddress string
-	LoopAmount    int
-	LoopPeriod    time.Duration
-	Name          string
-	LastName      string
-	Document      uint32
-	BirthYear     uint16
-	BirthMonth    uint8
-	BirthDay      uint8
-	Number        uint32
+	ID             uint8
+	ServerAddress  string
+	BatchMaxAmount int
 }
 
 // Client Entity that encapsulates how
 type Client struct {
-	config ClientConfig
-	conn   net.Conn
+	config  ClientConfig
+	conn    net.Conn
+	channel chan os.Signal
 }
 
 // NewClient Initializes a new client receiving the configuration
 // as a parameter
-func NewClient(config ClientConfig) *Client {
+func NewClient(config ClientConfig, channel chan os.Signal) *Client {
 	client := &Client{
-		config: config,
+		config:  config,
+		channel: channel,
 	}
 	return client
 }
@@ -52,119 +42,102 @@ func NewClient(config ClientConfig) *Client {
 func (c *Client) createClientSocket() error {
 	conn, err := net.Dial("tcp", c.config.ServerAddress)
 	if err != nil {
-		log.Criticalf(
-			"action: connect | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
 		return err
 	}
 	c.conn = conn
 	return nil
 }
 
-func createMessage(c *Client) []byte {
-	var buf bytes.Buffer
-
-	buf.WriteByte(c.config.ID)
-
-	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.Name)))
-	buf.WriteString(c.config.Name)
-
-	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.LastName)))
-	buf.WriteString(c.config.LastName)
-
-	binary.Write(&buf, binary.BigEndian, c.config.Document)
-
-	binary.Write(&buf, binary.BigEndian, c.config.BirthYear)
-	buf.WriteByte(c.config.BirthMonth)
-	buf.WriteByte(c.config.BirthDay)
-
-	binary.Write(&buf, binary.BigEndian, c.config.Number)
-
-	return buf.Bytes()
-}
-
-func (c *Client) sendMessage(msg []byte) {
-	written := 0
-
-	for written < len(msg) {
-		n, err := c.conn.Write(msg[written:])
-		if err != nil {
-			log.Fatalf("Error writting to conn: %v", err)
-		}
-		written += n
-	}
-}
-
-func recvACK(c *Client) error {
-	ack, err := bufio.NewReader(c.conn).ReadByte()
-	if err != nil {
-		return err
-	}
-
-	if ack == 0 {
-		return fmt.Errorf("Received NACK from server")
-	}
-
-	return nil
-}
-
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
-	channel := make(chan os.Signal, 1)
-	signal.Notify(channel, syscall.SIGTERM)
+	if err := c.createClientSocket(); err != nil {
+		log.Fatalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
+	}
+	defer c.conn.Close()
 
-	// There is an autoincremental msgID to identify every message sent
-	// Messages if the message amount threshold has not been surpassed
-	for msgID := 1; msgID <= c.config.LoopAmount; msgID++ {
-		// At this point every resource has been free. It is safe to exit if the signal has been received
-		if listenForSigTerm(channel) {
+	file, err := os.Open(fmt.Sprintf(".data/agency-%v.csv", c.config.ID))
+	if err != nil {
+		log.Fatalf(
+			"action: create_csv_reader | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+
+	pending := make([]Bet, 0, c.config.BatchMaxAmount)
+	eof := false
+	stopReading := false
+
+	for !eof || len(pending) > 0 {
+		if !stopReading {
+			pending = c.populateBatch(&eof, pending, reader, &stopReading)
+		}
+
+		if len(pending) == 0 {
 			break
 		}
 
-		// Create the connection the server in every loop iteration. Send an
-		if err := c.createClientSocket(); err != nil {
-			continue
-		}
+		left := c.sendBatch(pending)
 
-		msg := createMessage(c)
-		c.sendMessage(msg)
-
-		err := recvACK(c)
-		c.conn.Close()
-
-		if err != nil {
+		if err := recvACK(c.conn); err != nil {
 			if err.Error() == "Received NACK from server" {
 				log.Error("action: receive_message | result: nack")
-				continue
 			} else {
-				log.Errorf("action: receive_message | result: fail | client_id: %v | error: %v",
+				log.Errorf(
+					"action: receive_message | result: fail | client_id: %v | error: %v",
 					c.config.ID,
 					err,
 				)
-				return
 			}
+			return
 		}
 
-		log.Infof("action: apuesta_enviada | result: success | dni: %v | numero: %v",
-			c.config.Document,
-			c.config.Number,
-		)
-
-		// Wait a time between sending one message and the next one
-		time.Sleep(c.config.LoopPeriod)
-
+		log.Info("action: receive_message | result: ack")
+		pending = left
 	}
-	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
 }
 
-func listenForSigTerm(channel chan os.Signal) bool {
-	select {
-	case sig := <-channel:
-		fmt.Println("Received signal", sig)
-		return true
-	default:
-		return false
+// sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch
+func (c *Client) sendBatch(pending []Bet) []Bet {
+	msg, left := CreateBatch(pending)
+	sendMessage(c.conn, msg)
+	return left
+}
+
+func (c *Client) populateBatch(eof *bool, batch []Bet, reader *csv.Reader, stopReading *bool) []Bet {
+	for !*eof && len(batch) < c.config.BatchMaxAmount {
+		if ListenForSigTerm(c.channel) {
+			*stopReading = true
+			break
+		}
+
+		line, err := reader.Read()
+		if err != nil {
+			if err == io.EOF {
+				*eof = true
+				break
+			}
+			log.Errorf(
+				"action: read_csv_line | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			continue
+		}
+
+		bet, err := CreatBetFromCSVLine(c.config.ID, line)
+		if err != nil {
+			log.Errorf(
+				"action: create_bet_from_csv_line | result: fail | client_id: %v | error: %v",
+				c.config.ID,
+				err,
+			)
+			continue
+		}
+		batch = append(batch, *bet)
 	}
+
+	return batch
 }
