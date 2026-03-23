@@ -55,7 +55,7 @@ func (c *Client) StartClientLoop() {
 	}
 	defer c.conn.Close()
 
-	file, err := os.Open(fmt.Sprintf(".data/agency-%v.csv", c.config.ID))
+	file, err := os.Open(fmt.Sprintf("/agency-%v.csv", c.config.ID))
 	if err != nil {
 		log.Fatalf(
 			"action: create_csv_reader | result: fail | client_id: %v | error: %v",
