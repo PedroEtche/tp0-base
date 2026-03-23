@@ -83,7 +83,7 @@ func (c *Client) StartClientLoop() {
 
 		if err := recvACK(c.conn); err != nil {
 			if err.Error() == "Received NACK from server" {
-				log.Error("action: receive_message | result: nack")
+				log.Error("action: receive_message | result: fail")
 				// Corrupted batch. Try next batch
 				pending = pending[:0]
 				continue
@@ -97,10 +97,10 @@ func (c *Client) StartClientLoop() {
 			}
 		}
 
-		log.Info("action: receive_message | result: ack")
+		log.Info("action: receive_message | result: success")
 		pending = left
 	}
-	log.Info("action: batch_terminado | result: succes")
+	log.Info("action: batch_terminado | result: success")
 }
 
 // sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch
