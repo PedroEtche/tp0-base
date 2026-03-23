@@ -96,7 +96,12 @@ func (c *Client) StartClientLoop() {
 
 		log.Info("action: receive_message | result: ack")
 		pending = left
+
+		// ACK means more batches need to be sent
+		sendACK(c.conn)
 	}
+	// NACK means the connection has finish
+	sendNACK(c.conn)
 }
 
 // sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch
