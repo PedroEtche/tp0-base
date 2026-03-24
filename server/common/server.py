@@ -87,11 +87,11 @@ class Server:
             bets = load_bets()
             winners = []
             for bet in bets:
-                if bet.agency == str(client_id) and has_won(bet):
+                if bet.agency == client_id and has_won(bet):
                     winners.append(int(bet.document))
 
             send_winners(client_sock, winners)
-            logging.info('action: pedido_ganadores | result: success | cantidad: {len(winners)}')
+            logging.info(f'action: pedido_ganadores | result: success | cantidad: {len(winners)}')
         except Exception as e:
             logging.error(f'action: pedido_ganadores | result: fail | err: {e}')
 
