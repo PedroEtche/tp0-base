@@ -172,7 +172,7 @@ func showWinners(c *Client) {
 		winners, err := recvWinnersRespond(c.conn)
 		if err != nil {
 			if errors.Is(err, ErrNACK) {
-				log.Error("action: consultar_ganadores | result: fail | description: todavia se esperan apuestas")
+				log.Info("action: consultar_ganadores | description: todavia se esperan apuestas")
 				c.conn.Close()
 				time.Sleep(WAIT_TIME)
 				continue
