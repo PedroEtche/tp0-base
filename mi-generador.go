@@ -64,13 +64,13 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
       - CLI_ID=%v
     volumes:
       - ./client/config.yaml:/config.yaml
-      - ./.data/agency-%v.csv:/agency-1.csv
+      - ./.data/agency-%v.csv:/agency-%v.csv
     networks:
       - testing_net
     depends_on:
       - server
 
-`, clientID, clientID, clientID, clientID)
+`, clientID, clientID, clientID, clientID, clientID)
 
 		writeConfig(w, block)
 	}
