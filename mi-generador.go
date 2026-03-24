@@ -8,22 +8,6 @@ import (
 	"strconv"
 )
 
-var docker_compose_server_config string = `name: tp0
-services:
-  server:
-    container_name: server
-    image: server:latest
-    entrypoint: python3 /main.py
-    environment:
-      - PYTHONUNBUFFERED=1
-      - SERVER_LISTEN_BACKLOG=5
-    volumes:
-      - ./server/config.ini:/config.ini
-    networks:
-      - testing_net
-
-`
-
 var docker_compose_network_config string = `networks:
   testing_net:
     ipam:
