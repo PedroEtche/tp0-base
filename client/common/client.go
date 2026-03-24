@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"time"
 
 	"github.com/op/go-logging"
 )
@@ -48,68 +49,6 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-// StartClientLoop Send messages to the client until some time threshold is met
-func (c *Client) StartClientLoop() {
-	if err := c.createClientSocket(); err != nil {
-		log.Fatalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
-	}
-	defer c.conn.Close()
-
-	file, err := os.Open(fmt.Sprintf("/agency-%v.csv", c.config.ID))
-	if err != nil {
-		log.Fatalf(
-			"action: create_csv_reader | result: fail | client_id: %v | error: %v",
-			c.config.ID,
-			err,
-		)
-	}
-	defer file.Close()
-	reader := csv.NewReader(file)
-
-	pending := make([]Bet, 0, c.config.BatchMaxAmount)
-	eof := false
-	stopReading := false
-
-	for !eof || len(pending) > 0 {
-		if !stopReading {
-			pending = c.populateBatch(&eof, pending, reader, &stopReading)
-		}
-
-		if len(pending) == 0 {
-			break
-		}
-
-		left := c.sendBatch(pending)
-
-		if err := recvACK(c.conn); err != nil {
-			if err.Error() == "Received NACK from server" {
-				log.Error("action: receive_message | result: fail")
-				// Corrupted batch. Try next batch
-				pending = pending[:0]
-				continue
-			} else {
-				log.Errorf(
-					"action: receive_message | result: fail | client_id: %v | error: %v",
-					c.config.ID,
-					err,
-				)
-				return
-			}
-		}
-
-		log.Info("action: receive_message | result: success")
-		pending = left
-	}
-	log.Info("action: batch_terminado | result: success")
-}
-
-// sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch
-func (c *Client) sendBatch(pending []Bet) []Bet {
-	msg, left := CreateBatch(pending)
-	sendMessage(c.conn, msg)
-	return left
-}
-
 func (c *Client) populateBatch(eof *bool, batch []Bet, reader *csv.Reader, stopReading *bool) []Bet {
 	for !*eof && len(batch) < c.config.BatchMaxAmount {
 		if ListenForSigTerm(c.channel) {
@@ -144,4 +83,99 @@ func (c *Client) populateBatch(eof *bool, batch []Bet, reader *csv.Reader, stopR
 	}
 
 	return batch
+}
+
+// sendBatch Send a batch of bets to the server. The method returns the bets that were not sent in the batch
+func (c *Client) sendBatch(pending []Bet) ([]Bet, error) {
+	msg, left := CreateBatch(pending)
+	return left, sendMessage(c.conn, msg)
+}
+
+// StartClientLoop Send bets to the Server an the polls for the winner
+func (c *Client) StartClientLoop() {
+	file, err := os.Open(fmt.Sprintf("/agency-%v.csv", c.config.ID))
+	if err != nil {
+		log.Fatalf(
+			"action: create_csv_reader | result: fail | client_id: %v | error: %v",
+			c.config.ID,
+			err,
+		)
+	}
+	defer file.Close()
+	reader := csv.NewReader(file)
+
+	pending := make([]Bet, 0, c.config.BatchMaxAmount)
+	eof := false
+	stopReading := false
+
+	if err := c.createClientSocket(); err != nil {
+		log.Fatalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
+	}
+	defer c.conn.Close()
+
+	if err := sendBatchStartRequest(c.conn, c.config.ID); err != nil {
+		log.Errorf("action: send_batch_start_request | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		return
+	}
+
+	for !eof || len(pending) > 0 {
+		if !stopReading {
+			pending = c.populateBatch(&eof, pending, reader, &stopReading)
+		}
+
+		if len(pending) == 0 {
+			break
+		}
+
+		left, err := c.sendBatch(pending)
+		if err != nil {
+			log.Errorf("action: send_batch | result: fail | client_id: %v | error: %v", c.config.ID, err)
+			return
+		}
+
+		if err := recvACK(c.conn); err != nil {
+			if err.Error() == "Received NACK from server" {
+				log.Error("action: receive_message | result: fail")
+				// Corrupted batch. Try next batch
+				pending = pending[:0]
+				continue
+			} else {
+				log.Errorf(
+					"action: receive_message | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
+		}
+
+		log.Info("action: receive_message | result: success")
+		pending = left
+	}
+	log.Info("action: apuestas_enviadas | result: success")
+
+	// Polls the server for the winners
+	for {
+		if err := sendWinnersRequest(c.conn, c.config.ID); err != nil {
+			log.Errorf("action: send_winners_request | result: fail | client_id: %v | error: %v", c.config.ID, err)
+			return
+		}
+		winners, err := recvWinnersRespond(c.conn)
+		if err != nil {
+			if err.Error() == "Received NACK from server" {
+				log.Error("action: consultar_ganadores | result: fail | description: todavia se esperan apuestas")
+				time.Sleep(time.Millisecond * 5000)
+				continue
+			} else {
+				log.Errorf(
+					"action: receive_message | result: fail | client_id: %v | error: %v",
+					c.config.ID,
+					err,
+				)
+				return
+			}
+		}
+		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", len(winners))
+		break
+	}
 }

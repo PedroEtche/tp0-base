@@ -1,7 +1,9 @@
 from common.utils import Bet
 
-ACK = b'\x01'
-NACK = b'\x00'
+ACK = b'\x00'
+NACK = b'\xFF'
+BATCH = 0
+WINNERS_REQUEST = 1
 
 def read_exact(socket, n):
     data = bytearray()
@@ -51,8 +53,33 @@ def deserialize_batch(socket):
         bets.append(deserialize_into_bet(socket))
     return bets
 
+def read_client_action(socket):
+    byte = read_exact(socket, 1)[0] # Get the byte from the bytearray
+    action = (byte >> 7) & 0b1
+    client_id = byte & 0b01111111
+
+    if action == BATCH:
+        return ('batch', client_id)
+    return "winner_request", client_id
+
 def send_ACK(socket):
     full_write(socket, ACK)
 
 def send_NACK(socket):
     full_write(socket, NACK)
+
+
+def serialize_winners(winners):
+    data = bytearray()
+
+    data.extend(len(winners).to_bytes(1, byteorder='big', signed=False))
+
+    for winner in winners:
+        data.extend(winner.to_bytes(4, byteorder='big', signed=False))
+
+    return data
+
+def send_winners(socket, winners):
+    payload = serialize_winners(winners)
+    full_write(socket, payload)
+

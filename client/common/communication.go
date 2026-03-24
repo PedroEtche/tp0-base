@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 )
 
@@ -16,8 +17,12 @@ Procotol for serializing a batch of bets:
 */
 
 const (
-	MAX_PACKET_SIZE       int = 1024 * 8            // 8KB
-	MAX_BATCH_PACKET_SIZE int = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
+	MAX_PACKET_SIZE       int  = 1024 * 8            // 8KB
+	MAX_BATCH_PACKET_SIZE int  = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
+	BATCH                 byte = 0x00
+	WINNERS_REQUEST       byte = 0x01
+	ACK                   byte = 0x00
+	NACK                  byte = 0xFF
 )
 
 // CreateBatch create a Batch Packet from a list of bets. It returns the byte slice representing the packet.
@@ -87,16 +92,28 @@ func createMessage(bet *Bet) []byte {
 	return buf.Bytes()
 }
 
-func sendMessage(conn net.Conn, msg []byte) {
+func sendMessage(conn net.Conn, msg []byte) error {
 	written := 0
 
 	for written < len(msg) {
 		n, err := conn.Write(msg[written:])
 		if err != nil {
-			log.Fatalf("Error writting to conn: %v", err)
+			log.Errorf("Error writting to conn: %v", err)
+			return err
 		}
 		written += n
 	}
+	return nil
+}
+
+func sendBatchStartRequest(c net.Conn, id uint8) error {
+	msg := byte((BATCH << 7) | id)
+	return sendMessage(c, []byte{msg})
+}
+
+func sendWinnersRequest(c net.Conn, id uint8) error {
+	msg := byte((WINNERS_REQUEST << 7) | id)
+	return sendMessage(c, []byte{msg})
 }
 
 func recvACK(c net.Conn) error {
@@ -105,9 +122,44 @@ func recvACK(c net.Conn) error {
 		return err
 	}
 
-	if ack == 0 {
+	if ack == NACK {
 		return fmt.Errorf("Received NACK from server")
 	}
 
 	return nil
+}
+
+/*
+Procotol for serializing winners:
+
+- 1 byte: len(winners) or NACK (uint8)
+- N bytes: winners (uint32) -> N = len(winners) * 4
+
+1111 1111 is reserved for NACK, so max winners is 254.
+*/
+
+func recvWinnersRespond(c net.Conn) ([]uint32, error) {
+	header := make([]byte, 1)
+
+	if _, err := io.ReadFull(c, header); err != nil {
+		return nil, fmt.Errorf("error reading winner header: %w", err)
+	}
+
+	if header[0] == NACK {
+		return nil, fmt.Errorf("received NACK from server")
+	}
+
+	count := uint8(header[0])
+	winners := make([]uint32, 0, count)
+	winner := make([]byte, 4)
+
+	var i uint8 = 0
+	for ; i < count; i++ {
+		if _, err := io.ReadFull(c, winner); err != nil {
+			return nil, fmt.Errorf("error reading winner %d: %w", i, err)
+		}
+		winners = append(winners, binary.BigEndian.Uint32(winner))
+	}
+
+	return winners, nil
 }
