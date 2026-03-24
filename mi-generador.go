@@ -16,6 +16,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - SERVER_LISTEN_BACKLOG=5
     volumes:
       - ./server/config.ini:/config.ini
     networks:
@@ -47,11 +48,30 @@ func main() {
 	defer f.Close()
 
 	w := bufio.NewWriter(f)
-	writeConfig(w, docker_compose_server_config)
+	writeServerConfig(clientsInt, w)
 
 	writeClientsConfig(clientsInt, w)
 
 	writeConfig(w, docker_compose_network_config)
+}
+
+func writeServerConfig(clienstInt int, w *bufio.Writer) {
+	docker_compose_server_config := fmt.Sprintf(`name: tp0
+services:
+  server:
+    container_name: server
+    image: server:latest
+    entrypoint: python3 /main.py
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SERVER_LISTEN_BACKLOG=%v
+    volumes:
+      - ./server/config.ini:/config.ini
+    networks:
+      - testing_net
+
+`, clienstInt)
+	writeConfig(w, docker_compose_server_config)
 }
 
 func writeClientsConfig(clientsInt int, w *bufio.Writer) {

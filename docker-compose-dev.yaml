@@ -6,6 +6,7 @@ services:
     entrypoint: python3 /main.py
     environment:
       - PYTHONUNBUFFERED=1
+      - SERVER_LISTEN_BACKLOG=1
     volumes:
       - ./server/config.ini:/config.ini
     networks:
