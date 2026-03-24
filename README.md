@@ -1,21 +1,17 @@
-### Ejercicio N°6:
-Modificar los clientes para que envíen varias apuestas a la vez (modalidad conocida como procesamiento por _chunks_ o _batchs_). 
-Los _batchs_ permiten que el cliente registre varias apuestas en una misma consulta, acortando tiempos de transmisión y procesamiento.
+### Ejercicio N°7:
 
-La información de cada agencia será simulada por la ingesta de su archivo numerado correspondiente, provisto por la cátedra dentro de `.data/datasets.zip`.
-Los archivos deberán ser inyectados en los containers correspondientes y persistido por fuera de la imagen (hint: `docker volumes`), manteniendo la convencion de que el cliente N utilizara el archivo de apuestas `.data/agency-{N}.csv` .
+Modificar los clientes para que notifiquen al servidor al finalizar con el envío de todas las apuestas y así proceder con el sorteo.
+Inmediatamente después de la notificacion, los clientes consultarán la lista de ganadores del sorteo correspondientes a su agencia.
+Una vez el cliente obtenga los resultados, deberá imprimir por log: `action: consulta_ganadores | result: success | cant_ganadores: ${CANT}`.
 
-En el servidor, si todas las apuestas del *batch* fueron procesadas correctamente, imprimir por log: `action: apuesta_recibida | result: success | cantidad: ${CANTIDAD_DE_APUESTAS}`. En caso de detectar un error con alguna de las apuestas, debe responder con un código de error a elección e imprimir: `action: apuesta_recibida | result: fail | cantidad: ${CANTIDAD_DE_APUESTAS}`.
+El servidor deberá esperar la notificación de las 5 agencias para considerar que se realizó el sorteo e imprimir por log: `action: sorteo | result: success`.
+Luego de este evento, podrá verificar cada apuesta con las funciones `load_bets(...)` y `has_won(...)` y retornar los DNI de los ganadores de la agencia en cuestión. Antes del sorteo no se podrán responder consultas por la lista de ganadores con información parcial.
 
-La cantidad máxima de apuestas dentro de cada _batch_ debe ser configurable desde config.yaml. Respetar la clave `batch: maxAmount`, pero modificar el valor por defecto de modo tal que los paquetes no excedan los 8kB. 
+Las funciones `load_bets(...)` y `has_won(...)` son provistas por la cátedra y no podrán ser modificadas por el alumno.
 
-Por su parte, el servidor deberá responder con éxito solamente si todas las apuestas del _batch_ fueron procesadas correctamente.
+No es correcto realizar un broadcast de todos los ganadores hacia todas las agencias, se espera que se informen los DNIs ganadores que correspondan a cada una de ellas.
 
 
-Para este ejercicio modidfique el protocolo del ejercicio 5. Ahora el servidor solo espera el mensaje `batch`. Este mensaje esta compuesto del mismo protocolo del ejercicio anterior, pero se le suma un header extra. Los primero 2 bytes (uint16) del paquete indican la cantidad de apuestas (`bet`) que hay en el mensaje. Con este nuevo campo, sumado al protocolo del ejercicio 5, el servidor ya puede deserializar los batches correctamente. 
+Para resolver este ejercicio amplie el protocolo. Ahora el cliente debe mandar un avisando que va a mandar los batches. Una vez enviado esto puede hacer un mecanismo similar al del ejercicio anterior. Una vez terminado de mandar todo debe desconectarse. Ahora, para poder pedir por los ganadores, el cliente debe hacer un polling. Se conectara al servidor y mandara un mensaje pidiendo por los ganadores.
 
-En el caso de que el batch este correcto el servidor responde con un `ack` al cliente. Cuando el cliente recibe el `ack` arma otro batch y lo manda. Este bucle se repite hasta que no haya mas apuestas. El cliente cierra la conexion cuando recibe el ultimo `ack` y no tiene mas apuestas. El servidor detecta el cierre y da por terminada la comunicacion.
-
-En el caso de que haya algun problema en el batch, el servidor responde con un `nack` y descarta todo el batch. El cliente recibe el `nack` y lo imprime por pantalla. En este caso se descarta el batch y se continua con el siguiente.
-
-En caso de que el batch que eliga la agencia para mandar sea muy grande, a la hora de armar el mensaje, se arma el paquete con un tamaño menor o igual a 8 kB. Si la agencia quiso armar un paquete que superaba este limite, debera guardarse las apuestas que no entraron en el batch y intentar mandarlas en el siguiente batch. Para hacer este manejo tenemos la funcion `CreateBatch(bets []Bet) ([]byte, []Bet)`. Ya en la misma firma de la funcion se puede ver que se devuelve un slice de `Bet`, esto es por si no entraron en el paquete y deberan ser mandadas en otro batch
+Estos dos nuevos mensajes (el de mandar batches y el de pedir ganadores) son de un solo byte y siempre que un cliente se conecta debe mandar este mensaje. El bit mas representativo indica el tipo de mensaje, y el resto de bit indica el ID del cliente. El ID es de mas utilidad cuando se piden los ganadores. Con esto nos evitamos hacer el broadcast
