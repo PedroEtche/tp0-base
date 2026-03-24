@@ -81,7 +81,7 @@ class Server:
             # Check if all clients have notified their bets. If not, send NACK and return
             if self._clients_listen != self._clients_amount:
                 send_NACK(client_sock)
-                logging.info('action: pedido_ganadores | desc: todavia_faltan_apuestas')
+                logging.info('todavia_faltan_apuestas')
                 return
 
             bets = load_bets()
