@@ -81,6 +81,7 @@ class Server:
             # Check if all clients have notified their bets. If not, send NACK and return
             if self._clients_listen != self._clients_amount:
                 send_NACK(client_sock)
+                logging.info('action: pedido_ganadores | result: fail | desc: faltan clientes por notificar apuestas')
                 return
 
             bets = load_bets()
@@ -90,6 +91,7 @@ class Server:
                     winners.append(int(bet.document))
 
             send_winners(client_sock, winners)
+            logging.info('action: pedido_ganadores | result: success | cantidad: {len(winners)}')
         except Exception as e:
             logging.error(f'action: pedido_ganadores | result: fail | err: {e}')
 

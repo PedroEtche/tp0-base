@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -24,6 +25,8 @@ const (
 	ACK                   byte = 0x00
 	NACK                  byte = 0xFF
 )
+
+var ErrNACK = errors.New("Received NACK from server")
 
 // CreateBatch create a Batch Packet from a list of bets. It returns the byte slice representing the packet.
 // If the Bet slice is too big, it returns a slice with the bets that were not included in the batch and should be sent in the next batch.
@@ -123,7 +126,7 @@ func recvACK(c net.Conn) error {
 	}
 
 	if ack == NACK {
-		return fmt.Errorf("Received NACK from server")
+		return ErrNACK
 	}
 
 	return nil
@@ -146,7 +149,7 @@ func recvWinnersRespond(c net.Conn) ([]uint32, error) {
 	}
 
 	if header[0] == NACK {
-		return nil, fmt.Errorf("received NACK from server")
+		return nil, ErrNACK
 	}
 
 	count := uint8(header[0])

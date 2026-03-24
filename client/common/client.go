@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,8 @@ import (
 )
 
 var log = logging.MustGetLogger("log")
+
+const WAIT_TIME = time.Millisecond * 5000
 
 // ClientConfig Configuration used by the client
 type ClientConfig struct {
@@ -91,8 +94,7 @@ func (c *Client) sendBatch(pending []Bet) ([]Bet, error) {
 	return left, sendMessage(c.conn, msg)
 }
 
-// StartClientLoop Send bets to the Server an the polls for the winner
-func (c *Client) StartClientLoop() {
+func sendAllBatches(c *Client) bool {
 	file, err := os.Open(fmt.Sprintf("/agency-%v.csv", c.config.ID))
 	if err != nil {
 		log.Fatalf(
@@ -115,7 +117,7 @@ func (c *Client) StartClientLoop() {
 
 	if err := sendBatchStartRequest(c.conn, c.config.ID); err != nil {
 		log.Errorf("action: send_batch_start_request | result: fail | client_id: %v | error: %v", c.config.ID, err)
-		return
+		return true
 	}
 
 	for !eof || len(pending) > 0 {
@@ -130,11 +132,11 @@ func (c *Client) StartClientLoop() {
 		left, err := c.sendBatch(pending)
 		if err != nil {
 			log.Errorf("action: send_batch | result: fail | client_id: %v | error: %v", c.config.ID, err)
-			return
+			return true
 		}
 
 		if err := recvACK(c.conn); err != nil {
-			if err.Error() == "Received NACK from server" {
+			if errors.Is(err, ErrNACK) {
 				log.Error("action: receive_message | result: fail")
 				// Corrupted batch. Try next batch
 				pending = pending[:0]
@@ -145,26 +147,34 @@ func (c *Client) StartClientLoop() {
 					c.config.ID,
 					err,
 				)
-				return
+				return true
 			}
 		}
 
 		log.Info("action: receive_message | result: success")
 		pending = left
 	}
-	log.Info("action: apuestas_enviadas | result: success")
+	return false
+}
 
+func showWinners(c *Client) {
 	// Polls the server for the winners
 	for {
+		if err := c.createClientSocket(); err != nil {
+			log.Fatalf("action: connect | result: fail | client_id: %v | error: %v", c.config.ID, err)
+		}
+
 		if err := sendWinnersRequest(c.conn, c.config.ID); err != nil {
 			log.Errorf("action: send_winners_request | result: fail | client_id: %v | error: %v", c.config.ID, err)
-			return
+			break
 		}
+
 		winners, err := recvWinnersRespond(c.conn)
 		if err != nil {
-			if err.Error() == "Received NACK from server" {
+			if errors.Is(err, ErrNACK) {
 				log.Error("action: consultar_ganadores | result: fail | description: todavia se esperan apuestas")
-				time.Sleep(time.Millisecond * 5000)
+				c.conn.Close()
+				time.Sleep(WAIT_TIME)
 				continue
 			} else {
 				log.Errorf(
@@ -172,10 +182,23 @@ func (c *Client) StartClientLoop() {
 					c.config.ID,
 					err,
 				)
-				return
+				break
 			}
 		}
+
 		log.Infof("action: consulta_ganadores | result: success | cant_ganadores: %v", len(winners))
 		break
 	}
+	c.conn.Close()
+}
+
+// StartClientLoop Send bets to the Server an the polls for the winner
+func (c *Client) StartClientLoop() {
+	shouldReturn := sendAllBatches(c)
+	if shouldReturn {
+		return
+	}
+	log.Info("action: apuestas_enviadas | result: success")
+
+	showWinners(c)
 }
