@@ -1,6 +1,7 @@
 import socket
 import logging
 import signal
+import threading
 from common.utils import store_bets, load_bets, has_won
 from common.communication import deserialize_batch, read_client_action, send_ACK, send_NACK, send_winners
 
@@ -18,6 +19,10 @@ class Server:
         # Set SIGTERM resolution
         signal.signal(signal.SIGTERM, self.__graceful_exit)
         self._exit = False
+        # Locks to control the giveaway process and the access to the bets storage file
+        self._clients_listen_lock = threading.Lock()
+        self._storage_lock = threading.Lock()
+        self._client_threads = []
 
     def run(self):
         """
@@ -30,11 +35,20 @@ class Server:
 
         while not self._exit:
             client_sock = self.__accept_new_connection()
-            if client_sock == None:
+            if client_sock is None:
                 continue
-            self.__handle_client_connection(client_sock)
+
+            t = threading.Thread(
+                target=self.__handle_client_connection,
+                args=(client_sock,),
+                daemon=False
+            )
+            t.start()
+            self._client_threads.append(t)
 
         self._server_socket.close()
+        for t in self._client_threads:
+            t.join()
 
     def __handle_client_connection(self, client_sock):
         """
@@ -51,14 +65,16 @@ class Server:
 
         client_sock.close()
 
-
-
     def __handle_batch(self, client_sock):
         bets = []
-        while True: 
+        while True:
             try:
                 bets = deserialize_batch(client_sock)
+                # Critical section
+                self._storage_lock.acquire()
                 store_bets(bets)
+                self._storage_lock.release()
+                # End critical section
                 logging.info(f'action: apuesta_recibida | result: success | cantidad: {len(bets)}')
                 send_ACK(client_sock)
                 bets = []
@@ -66,29 +82,39 @@ class Server:
                 if isinstance(e, OSError) and str(e) == "Connection closed by client":
                     logging.info('action: connection_closed | result: success')
                     break
-                else: 
-                    logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
-                    send_NACK(client_sock)
+                logging.error(f'action: apuesta_recibida | result: fail | cantidad: {len(bets)}')
+                send_NACK(client_sock)
 
+        # Critical section
+        self._clients_listen_lock.acquire()
         self._clients_listen += 1
         if self._clients_listen == self._clients_amount:
             logging.info('action: sorteo | result: success')
-
-
+        self._clients_listen_lock.release()
+        # End critical section
 
     def __handle_giveaway_request(self, client_sock, client_id):
         try:
-            # Check if all clients have notified their bets. If not, send NACK and return
+            # Critical section
+            self._clients_listen_lock.acquire()
             if self._clients_listen != self._clients_amount:
                 send_NACK(client_sock)
                 logging.info('todavia_faltan_apuestas')
+                self._clients_listen_lock.release()
                 return
+            self._clients_listen_lock.release()
+            # End critical section
 
+            # Critical section
+            self._storage_lock.acquire()
             bets = load_bets()
+            self._storage_lock.release()
+            # End critical section
+
             winners = []
-            for bet in bets:
-                if bet.agency == client_id and has_won(bet):
-                    winners.append(int(bet.document))
+            for b in bets:
+                if b.agency == client_id and has_won(b):
+                    winners.append(int(b.document))
 
             send_winners(client_sock, winners)
             logging.info(f'action: pedido_ganadores | result: success | cantidad: {len(winners)}')
@@ -120,5 +146,3 @@ class Server:
         print("Gracefully shuting down server")
         print(f"SIGNAL: {signum}")
         self._exit = True
-
-
