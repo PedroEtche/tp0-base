@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -82,7 +83,7 @@ func (c *Client) StartClientLoop() {
 		left := c.sendBatch(pending)
 
 		if err := recvACK(c.conn); err != nil {
-			if err.Error() == "Received NACK from server" {
+			if errors.Is(err, ErrNACK) {
 				log.Error("action: receive_message | result: fail")
 				// Corrupted batch. Try next batch
 				pending = pending[:0]

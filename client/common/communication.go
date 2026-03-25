@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"net"
 )
 
@@ -16,9 +16,12 @@ Procotol for serializing a batch of bets:
 */
 
 const (
-	MAX_PACKET_SIZE       int = 1024 * 8            // 8KB
-	MAX_BATCH_PACKET_SIZE int = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
+	MAX_PACKET_SIZE       int  = 1024 * 8            // 8KB
+	MAX_BATCH_PACKET_SIZE int  = MAX_PACKET_SIZE - 2 // 2 byte for the number of bets
+	NACK                  byte = 0
 )
+
+var ErrNACK = errors.New("Received NACK from server")
 
 // CreateBatch create a Batch Packet from a list of bets. It returns the byte slice representing the packet.
 // If the Bet slice is too big, it returns a slice with the bets that were not included in the batch and should be sent in the next batch.
@@ -106,7 +109,7 @@ func recvACK(c net.Conn) error {
 	}
 
 	if ack == 0 {
-		return fmt.Errorf("Received NACK from server")
+		return ErrNACK
 	}
 
 	return nil
