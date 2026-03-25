@@ -40,4 +40,3 @@ sequenceDiagram
     Cliente->>Servidor: Enviar siguiente Batch
     Servidor-->>Cliente: ACK
     Cliente->>Servidor: Cerrar conexión TCP
-    Cliente->>Cliente: Procesamiento completo
