@@ -1,9 +1,7 @@
 package common
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -63,51 +61,15 @@ func (c *Client) createClientSocket() error {
 	return nil
 }
 
-func createMessage(c *Client) []byte {
-	var buf bytes.Buffer
-
-	buf.WriteByte(c.config.ID)
-
-	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.Name)))
-	buf.WriteString(c.config.Name)
-
-	binary.Write(&buf, binary.BigEndian, uint8(len(c.config.LastName)))
-	buf.WriteString(c.config.LastName)
-
-	binary.Write(&buf, binary.BigEndian, c.config.Document)
-
-	binary.Write(&buf, binary.BigEndian, c.config.BirthYear)
-	buf.WriteByte(c.config.BirthMonth)
-	buf.WriteByte(c.config.BirthDay)
-
-	binary.Write(&buf, binary.BigEndian, c.config.Number)
-
-	return buf.Bytes()
-}
-
-func (c *Client) sendMessage(msg []byte) {
-	written := 0
-
-	for written < len(msg) {
-		n, err := c.conn.Write(msg[written:])
-		if err != nil {
-			log.Fatalf("Error writting to conn: %v", err)
-		}
-		written += n
+// ListenForSigTerm Listen for SIGTERM signal and change the term flag to true if it is received
+func listenForSigTerm(channel chan os.Signal) bool {
+	select {
+	case sig := <-channel:
+		fmt.Println("Received signal", sig)
+		return true
+	default:
+		return false
 	}
-}
-
-func recvACK(c *Client) error {
-	ack, err := bufio.NewReader(c.conn).ReadByte()
-	if err != nil {
-		return err
-	}
-
-	if ack == 0 {
-		return fmt.Errorf("Received NACK from server")
-	}
-
-	return nil
 }
 
 // StartClientLoop Send messages to the client until some time threshold is met
@@ -128,14 +90,14 @@ func (c *Client) StartClientLoop() {
 			continue
 		}
 
-		msg := createMessage(c)
-		c.sendMessage(msg)
+		msg := c.CreateMessage()
+		c.SendMessage(msg)
 
-		err := recvACK(c)
+		err := c.RecvACK()
 		c.conn.Close()
 
 		if err != nil {
-			if err.Error() == "Received NACK from server" {
+			if errors.Is(err, ErrNACK) {
 				log.Error("action: receive_message | result: nack")
 				continue
 			} else {
@@ -157,14 +119,4 @@ func (c *Client) StartClientLoop() {
 
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
-}
-
-func listenForSigTerm(channel chan os.Signal) bool {
-	select {
-	case sig := <-channel:
-		fmt.Println("Received signal", sig)
-		return true
-	default:
-		return false
-	}
 }

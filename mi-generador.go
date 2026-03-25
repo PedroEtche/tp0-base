@@ -86,7 +86,7 @@ func writeClientsConfig(clientsInt int, w *bufio.Writer) {
 
 func writeConfig(w *bufio.Writer, s string) {
 	defer w.Flush()
-	// NOTE: Buffio parece evitar o al menos hacer muy poco probable que haya un shor write (al escribir en disco). Como se escriben muy pocos bytes por vez (menos de 256) asumo que no va a haber un short write
+	// NOTE: Buffio parece evitar o al menos hacer muy poco probable que haya un shor write (al escribir en disco por lo menos).
 	n, err := w.WriteString(s)
 	if err != nil {
 		log.Fatalf("Error appear when writting to file: %v", err)

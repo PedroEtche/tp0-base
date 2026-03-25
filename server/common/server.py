@@ -56,6 +56,7 @@ class Server:
 
         Function blocks until a connection to a client is made.
         Then connection created is printed and returned
+        If SIGTERM signal is received, function returns None to stop accepting new connections
         """
 
         logging.info('action: accept_connections | result: in_progress')
@@ -72,6 +73,7 @@ class Server:
         return None
 
     def __graceful_exit(self, signum, _):
+        '''Change the exit flag to stop accepting new connections and gracefully shutdown the server'''
         print("Gracefully shuting down server")
         print(f"SIGNAL: {signum}")
         self._exit = True

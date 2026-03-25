@@ -41,7 +41,7 @@ func TestCreateMessage(t *testing.T) {
 	for i, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			client := NewClient(tc.config)
-			actual := createMessage(client)
+			actual := client.CreateMessage()
 
 			if !bytes.Equal(actual, tc.expected) {
 				t.Errorf("Test %v - %s FAIL:\nexpected: %v\nactual:   %v", i, tc.name, tc.expected, actual)
@@ -77,7 +77,7 @@ func TestRecvACK(t *testing.T) {
 			}
 
 			c := &Client{conn: clientConn}
-			err := recvACK(c)
+			err := c.RecvACK()
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("unexpected error state. err=%v, wantErr=%v", err, tc.wantErr)
 			}

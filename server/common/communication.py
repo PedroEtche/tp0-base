@@ -4,6 +4,9 @@ ACK = b'\x01'
 NACK = b'\x00'
 
 def read_exact(socket, n):
+    '''
+    Read exactly n bytes from the socket. Prevents short reads
+    '''
     data = bytearray()
     while len(data) < n:
         bytes_recv = socket.recv(n - len(data))
@@ -13,6 +16,9 @@ def read_exact(socket, n):
     return data
 
 def full_write(socket, data):
+    '''
+    Write all bytes in data to the socket. Prevents short writes
+    '''
     data_sent = 0
     while data_sent < len(data):
         sent = socket.send(data[data_sent:])
@@ -22,6 +28,10 @@ def full_write(socket, data):
 
 
 def deserialize_into_bet(socket):
+    ''' 
+    Deserialize the data received from the client into a Bet object.
+    Used the protocol defined in the documentation
+    '''
     agency = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
 
     name_len = int.from_bytes(read_exact(socket, 1), byteorder='big', signed=False)
