@@ -54,6 +54,7 @@ class Server:
         """
         Read message from a specific client socket and closes the socket
 
+        The client needs to specify if it is sending a batch of bets or if it is asking for giveaway winners.
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
@@ -66,6 +67,10 @@ class Server:
         client_sock.close()
 
     def __handle_batch(self, client_sock):
+        '''
+        This method reads a batch of bets from the client socket and stores them in the database.
+        If an error occurs during the process, it sends a NACK to the client.
+        '''
         bets = []
         while True:
             try:
@@ -94,6 +99,12 @@ class Server:
         # End critical section
 
     def __handle_giveaway_request(self, client_sock, client_id):
+        '''
+        This method checks if all clients have sent their bets, and if so, it
+        loads the bets from the database, checks which bets have won, and sends
+        the winners back to the client. If an error occurs during the process,
+        it sends a NACK to the client.
+        '''
         try:
             # Critical section
             self._clients_listen_lock.acquire()
