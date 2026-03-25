@@ -66,6 +66,16 @@ func (c *Client) sendMessage(msg string) {
 	}
 }
 
+// ListenForSigTerm Listen for SIGTERM signal and change the term flag to true if it is received
+func listenForSigTerm(channel chan os.Signal, term *bool) {
+	select {
+	case sig := <-channel:
+		fmt.Println("Received signal", sig)
+		*term = true
+	default:
+	}
+}
+
 // StartClientLoop Send messages to the client until some time threshold is met
 func (c *Client) StartClientLoop() {
 	channel := make(chan os.Signal, 1)
@@ -104,13 +114,4 @@ func (c *Client) StartClientLoop() {
 		listenForSigTerm(channel, &term)
 	}
 	log.Infof("action: loop_finished | result: success | client_id: %v", c.config.ID)
-}
-
-func listenForSigTerm(channel chan os.Signal, term *bool) {
-	select {
-	case sig := <-channel:
-		fmt.Println("Received signal", sig)
-		*term = true
-	default:
-	}
 }
